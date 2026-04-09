@@ -2,13 +2,9 @@ import pandas as pd
 import datetime
 import pytz
 import json
-import asyncio
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 
 TOKEN = "8297475538:AAE5ZSQSz3x-Ly6Gq1D-_F7yEDfCeuKXpy8"
@@ -17,17 +13,17 @@ CSV_URL = "https://docs.google.com/spreadsheets/d/1QMrkdAfyaaR3WLq23cvl30eCLocH4
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
-USERS_FILE = r"D:\bot\users.json"
+USERS_FILE = "users.json"
 
 
 days_map = {
-    "Понедельник": "mon",
-    "Вторник": "tue",
-    "Среда": "wed",
-    "Четверг": "thu",
-    "Пятница": "fri",
-    "Суббота": "sat",
-    "Воскресенье": "sun"
+    "Понедельник": 0,
+    "Вторник": 1,
+    "Среда": 2,
+    "Четверг": 3,
+    "Пятница": 4,
+    "Суббота": 5,
+    "Воскресенье": 6
 }
 
 
@@ -59,49 +55,6 @@ async def send_to_all(app, text):
             await app.bot.send_message(chat_id=user, text=text)
         except:
             pass
-
-
-def schedule_jobs(app):
-
-    scheduler = BackgroundScheduler(timezone=MOSCOW_TZ)
-
-    df = load_schedule()
-
-    for _, row in df.iterrows():
-
-        hour = int(row.iloc[0])
-
-        for day in days_map:
-
-            if day in df.columns:
-
-                event = str(row[day])
-
-                if event != "nan":
-
-                    scheduler.add_job(
-                        lambda e=event: asyncio.run(
-                            send_to_all(app, f"📢 Началось событие: {e}")
-                        ),
-                        CronTrigger(
-                            day_of_week=days_map[day],
-                            hour=hour,
-                            minute=0
-                        )
-                    )
-
-                    scheduler.add_job(
-                        lambda e=event: asyncio.run(
-                            send_to_all(app, f"⏰ Через 5 минут начнётся: {e}")
-                        ),
-                        CronTrigger(
-                            day_of_week=days_map[day],
-                            hour=hour,
-                            minute=55
-                        )
-                    )
-
-    scheduler.start()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,6 +108,42 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message)
 
 
+async def check_schedule(context: ContextTypes.DEFAULT_TYPE):
+
+    now = datetime.datetime.now(MOSCOW_TZ)
+
+    df = load_schedule()
+
+    weekday = now.weekday()
+
+    for _, row in df.iterrows():
+
+        hour = int(row.iloc[0])
+
+        for day_name, day_num in days_map.items():
+
+            if weekday == day_num:
+
+                event = str(row[day_name])
+
+                if event == "nan":
+                    continue
+
+                if now.minute == 55 and now.hour == hour - 1:
+
+                    await send_to_all(
+                        context,
+                        f"⏰ Через 5 минут начнётся: {event}"
+                    )
+
+                if now.minute == 0 and now.hour == hour:
+
+                    await send_to_all(
+                        context,
+                        f"📢 Началось событие: {event}"
+                    )
+
+
 def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
@@ -163,7 +152,11 @@ def main():
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("today", today))
 
-    schedule_jobs(app)
+    app.job_queue.run_repeating(
+        check_schedule,
+        interval=60,
+        first=5
+    )
 
     print("SCHEDULE BOT STARTED")
 
