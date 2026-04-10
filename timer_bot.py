@@ -1,6 +1,7 @@
 import datetime
 import pytz
 import json
+import asyncio
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -12,6 +13,7 @@ MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 USERS_FILE = "timer_users.json"
 
+
 EXCLUDED = {
     0: [(21, 22)],
     1: [(19, 20), (22, 23)],
@@ -19,24 +21,17 @@ EXCLUDED = {
     3: [(19, 20), (22, 23)],
     4: [(21, 22)],
     5: [(18, 19)],
-    6: [(19, 20)]
+    6: [(19, 20)],
 }
 
 
 def load_users():
-
     try:
-
         with open(USERS_FILE, "r") as f:
-
             return json.load(f)
-
     except:
-
         with open(USERS_FILE, "w") as f:
-
             json.dump([], f)
-
         return []
 
 
@@ -63,17 +58,30 @@ def allowed_now():
     return True
 
 
+def is_exact_timer_minute(now):
+
+    return now.minute % 7 == 0
+
+
 async def send_timer(context: ContextTypes.DEFAULT_TYPE):
+
+    now = datetime.datetime.now(MOSCOW_TZ)
 
     if not allowed_now():
         return
 
+    if not is_exact_timer_minute(now):
+        return
+
     for user in users:
+
         try:
+
             await context.bot.send_message(
                 chat_id=user,
                 text="Регайся на арену"
             )
+
         except:
             pass
 
@@ -83,11 +91,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id not in users:
+
         users.append(chat_id)
         save_users(users)
 
     await update.message.reply_text(
-        "✅ Ты подписан на таймер каждые 7 минут"
+        "✅ Таймер включён (каждые 7 минут)"
     )
 
 
@@ -96,54 +105,37 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id in users:
+
         users.remove(chat_id)
         save_users(users)
 
     await update.message.reply_text(
-        "❌ Ты отписан от таймера"
+        "❌ Таймер отключён"
     )
 
 
-def schedule_jobs(app):
-
-    minutes = [0, 7, 14, 21, 28, 35, 42, 49, 56]
-
-    for minute in minutes:
-
-        app.job_queue.run_daily(
-            send_timer,
-            time=datetime.time(
-                hour=0,
-                minute=minute,
-                tzinfo=MOSCOW_TZ
-            )
-        )
-
-        for hour in range(1, 24):
-
-            app.job_queue.run_daily(
-                send_timer,
-                time=datetime.time(
-                    hour=hour,
-                    minute=minute,
-                    tzinfo=MOSCOW_TZ
-                )
-            )
-
-
-def main():
+async def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
 
-    schedule_jobs(app)
+    app.job_queue.run_repeating(
+        send_timer,
+        interval=60,
+        first=10
+    )
 
     print("TIMER BOT STARTED OK")
 
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+
+    asyncio.run(main())
