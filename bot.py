@@ -23,7 +23,7 @@ CSV_URL = "https://docs.google.com/spreadsheets/d/1QMrkdAfyaaR3WLq23cvl30eCLocH4
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
-USERS_FILE = "users.json"
+USERS_FILE = "/data/users.json"
 
 
 days_map = {
