@@ -13,7 +13,6 @@ PORT = int(os.getenv("PORT", 8080))
 
 WEBHOOK_URL = "https://l2-bots-production.up.railway.app"
 
-
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 USERS_FILE = "/data/timer_users.json"
@@ -26,11 +25,8 @@ EXCLUDED = {
     3: [(19, 20), (22, 23)],
     4: [(21, 22)],
     5: [(18, 19)],
-    6: [(19, 20)],
+    6: [(19, 20)]
 }
-
-
-last_sent_minute = None
 
 
 def load_users():
@@ -59,11 +55,8 @@ def allowed_now():
     hour = now.hour
 
     if weekday in EXCLUDED:
-
         for start, end in EXCLUDED[weekday]:
-
             if start <= hour < end:
-
                 return False
 
     return True
@@ -71,30 +64,15 @@ def allowed_now():
 
 async def send_timer(context: ContextTypes.DEFAULT_TYPE):
 
-    global last_sent_minute
-
-    now = datetime.datetime.now(MOSCOW_TZ)
-
     if not allowed_now():
         return
 
-    if now.minute % 7 != 0:
-        return
-
-    if last_sent_minute == now.minute:
-        return
-
-    last_sent_minute = now.minute
-
     for user in users:
-
         try:
-
             await context.bot.send_message(
                 chat_id=user,
                 text="Регайся на арену"
             )
-
         except:
             pass
 
@@ -104,13 +82,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id not in users:
-
         users.append(chat_id)
-
         save_users(users)
 
     await update.message.reply_text(
-        "✅ Таймер включён"
+        "✅ Таймер подключён"
     )
 
 
@@ -119,9 +95,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id in users:
-
         users.remove(chat_id)
-
         save_users(users)
 
     await update.message.reply_text(
@@ -129,31 +103,14 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-def main():
-
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("stop", stop))
-
-    job_queue = app.job_queue
+async def schedule_jobs(app):
 
     minutes = [0, 7, 14, 21, 28, 35, 42, 49, 56]
 
-    for minute in minutes:
+    for hour in range(24):
+        for minute in minutes:
 
-        job_queue.run_daily(
-            send_timer,
-            time=datetime.time(
-                hour=0,
-                minute=minute,
-                tzinfo=MOSCOW_TZ
-            )
-        )
-
-        for hour in range(1, 24):
-
-            job_queue.run_daily(
+            app.job_queue.run_daily(
                 send_timer,
                 time=datetime.time(
                     hour=hour,
@@ -161,6 +118,19 @@ def main():
                     tzinfo=MOSCOW_TZ
                 )
             )
+
+
+def main():
+
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(schedule_jobs)
+        .build()
+    )
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("stop", stop))
 
     print("WEBHOOK TIMER BOT STARTED OK")
 
@@ -173,5 +143,4 @@ def main():
 
 
 if __name__ == "__main__":
-
     main()
