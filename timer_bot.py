@@ -71,7 +71,7 @@ async def send_timer(context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(
                 chat_id=user,
-                text="Регайся на арену"
+                text="Регайся на арену, шакал"
             )
         except:
             pass
