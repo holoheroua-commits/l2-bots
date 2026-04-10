@@ -2,16 +2,9 @@ import os
 import json
 import datetime
 import pytz
-import asyncio
 
 from telegram import Update
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes
-)
-
-from aiohttp import web
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 
 TOKEN = os.getenv("TOKEN")
@@ -93,7 +86,7 @@ async def send_schedule(context: ContextTypes.DEFAULT_TYPE):
             pass
 
 
-async def main():
+def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -106,29 +99,14 @@ async def main():
         first=10
     )
 
-    await app.initialize()
-
-    await app.bot.set_webhook(
-        url=f"{WEBHOOK_URL}/{TOKEN}"
-    )
-
-    runner = web.AppRunner(app.web_app())
-
-    await runner.setup()
-
-    site = web.TCPSite(
-        runner,
-        "0.0.0.0",
-        PORT
-    )
-
-    await site.start()
-
     print("WEBHOOK BOT STARTED OK")
 
-    await asyncio.Event().wait()
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+    )
 
 
 if __name__ == "__main__":
-
-    asyncio.run(main())
+    main()
