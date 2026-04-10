@@ -168,7 +168,7 @@ def main():
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("today", today))
 
-    schedule_jobs(app)
+    app.post_init(schedule_jobs)
 
     print("WEBHOOK SCHEDULE BOT STARTED OK")
 
