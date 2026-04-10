@@ -125,11 +125,10 @@ def main():
     print("WEBHOOK TIMER BOT STARTED OK")
 
     app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
-        secret_token=TOKEN
-    )
+    listen="0.0.0.0",
+    port=PORT,
+    webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+)
 
 
 if __name__ == "__main__":
