@@ -145,7 +145,6 @@ def main():
         first=2
     )
 
-    job_queue.start()
 
     print("WEBHOOK TIMER BOT STARTED OK")
 
