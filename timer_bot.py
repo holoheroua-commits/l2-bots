@@ -16,7 +16,7 @@ WEBHOOK_URL = "https://l2-bots-production.up.railway.app"
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
-USERS_FILE = "timer_users.json"
+USERS_FILE = "/data/timer_users.json"
 
 
 EXCLUDED = {
