@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import pytz
 import json
+import asyncio
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
@@ -23,13 +24,13 @@ USERS_FILE = "/data/users.json"
 
 
 days_map = {
-    "Понедельник": 0,
-    "Вторник": 1,
-    "Среда": 2,
-    "Четверг": 3,
-    "Пятница": 4,
-    "Суббота": 5,
-    "Воскресенье": 6
+    0: "Понедельник",
+    1: "Вторник",
+    2: "Среда",
+    3: "Четверг",
+    4: "Пятница",
+    5: "Суббота",
+    6: "Воскресенье"
 }
 
 
@@ -66,64 +67,51 @@ async def send_to_all(bot, text):
             pass
 
 
-async def schedule_jobs(app):
+async def scheduler_loop(app):
 
-    scheduler = app.job_queue.scheduler
+    last_checked_minute = None
 
-    scheduler.remove_all_jobs()
+    while True:
 
-    df = load_schedule()
+        now = datetime.datetime.now(MOSCOW_TZ)
 
-    for _, row in df.iterrows():
+        if now.minute != last_checked_minute:
 
-        hour = int(row.iloc[0])
+            last_checked_minute = now.minute
 
-        for day_name, weekday_number in days_map.items():
+            df = load_schedule()
 
-            event = row[day_name]
+            weekday_name = days_map[now.weekday()]
 
-            if pd.notna(event):
+            for _, row in df.iterrows():
 
-                event_text = str(event)
+                hour = int(row.iloc[0])
 
-                # уведомление в момент события
-                scheduler.add_job(
-                    lambda e=event_text:
-                    app.create_task(
-                        send_to_all(app.bot,
-                        f"📢 Началось событие: {e}")
-                    ),
-                    trigger="cron",
-                    day_of_week=weekday_number,
-                    hour=hour,
-                    minute=0,
-                    timezone=MOSCOW_TZ
-                )
+                event = row[weekday_name]
 
-                # уведомление за 5 минут
-                before_hour = (hour - 1) % 24
+                if pd.notna(event):
 
-                scheduler.add_job(
-                    lambda e=event_text:
-                    app.create_task(
-                        send_to_all(app.bot,
-                        f"⏰ Через 5 минут начнётся: {e}")
-                    ),
-                    trigger="cron",
-                    day_of_week=weekday_number,
-                    hour=before_hour,
-                    minute=55,
-                    timezone=MOSCOW_TZ
-                )
+                    event = str(event)
 
+                    # уведомление за 5 минут
+                    before_hour = (hour - 1) % 24
 
-async def reload_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
+                    if now.hour == before_hour and now.minute == 55:
 
-    await schedule_jobs(context.application)
+                        await send_to_all(
+                            app.bot,
+                            f"⏰ Через 5 минут начнётся: {event}"
+                        )
 
-    await update.message.reply_text(
-        "♻️ Расписание обновлено из Google таблицы"
-    )
+                    # уведомление в момент события
+                    if now.hour == hour and now.minute == 0:
+
+                        await send_to_all(
+                            app.bot,
+                            f"📢 Началось событие: {event}"
+                        )
+
+        await asyncio.sleep(5)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,9 +148,9 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     df = load_schedule()
 
-    today_num = datetime.datetime.now(MOSCOW_TZ).weekday()
-
-    today_name = list(days_map.keys())[today_num]
+    today_name = days_map[
+        datetime.datetime.now(MOSCOW_TZ).weekday()
+    ]
 
     message = "📅 Сегодня события:\n\n"
 
@@ -179,21 +167,27 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message)
 
 
+async def post_init(app):
+
+    asyncio.create_task(
+        scheduler_loop(app)
+    )
+
+
 def main():
 
     app = (
         ApplicationBuilder()
         .token(TOKEN)
-        .post_init(schedule_jobs)
+        .post_init(post_init)
         .build()
     )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("today", today))
-    app.add_handler(CommandHandler("reload", reload_schedule))
 
-    print("WEBHOOK SCHEDULE BOT STARTED OK")
+    print("SCHEDULE LOOP STARTED")
 
     app.run_webhook(
         listen="0.0.0.0",
