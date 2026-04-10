@@ -65,7 +65,14 @@ async def send_to_all(context, text):
 
 # ВАЖНО: функция должна быть async
 async def schedule_jobs(app):
-
+    # быстрый тест через 20 секунд после запуска
+    app.job_queue.run_once(
+        lambda context:
+        context.application.create_task(
+            send_to_all(context, "TEST SCHEDULE WORKS ✅")
+        ),
+        when=20
+    )
     df = load_schedule()
 
     for _, row in df.iterrows():
