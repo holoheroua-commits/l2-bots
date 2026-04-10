@@ -1,13 +1,18 @@
+import os
 import datetime
 import pytz
 import json
-import asyncio
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 
-TOKEN = "8786027118:AAG4URfFxnF8bgTxfBReCMvtH3aEor4vyGE"
+TOKEN = os.getenv("TOKEN")
+
+PORT = int(os.getenv("PORT", 8080"))
+
+WEBHOOK_URL = "https://l2-bots-production.up.railway.app"
+
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
@@ -26,16 +31,21 @@ EXCLUDED = {
 
 
 def load_users():
+
     try:
         with open(USERS_FILE, "r") as f:
             return json.load(f)
+
     except:
+
         with open(USERS_FILE, "w") as f:
             json.dump([], f)
+
         return []
 
 
 def save_users(users):
+
     with open(USERS_FILE, "w") as f:
         json.dump(users, f)
 
@@ -51,8 +61,11 @@ def allowed_now():
     hour = now.hour
 
     if weekday in EXCLUDED:
+
         for start, end in EXCLUDED[weekday]:
+
             if start <= hour < end:
+
                 return False
 
     return True
@@ -68,9 +81,11 @@ async def send_timer(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.datetime.now(MOSCOW_TZ)
 
     if not allowed_now():
+
         return
 
     if not is_exact_timer_minute(now):
+
         return
 
     for user in users:
@@ -83,6 +98,7 @@ async def send_timer(context: ContextTypes.DEFAULT_TYPE):
             )
 
         except:
+
             pass
 
 
@@ -93,10 +109,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id not in users:
 
         users.append(chat_id)
+
         save_users(users)
 
     await update.message.reply_text(
-        "✅ Таймер включён (каждые 7 минут)"
+        "✅ Таймер включён"
     )
 
 
@@ -107,6 +124,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in users:
 
         users.remove(chat_id)
+
         save_users(users)
 
     await update.message.reply_text(
@@ -114,9 +132,14 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def main():
+def main():
 
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .webhook_url(f"{WEBHOOK_URL}/{TOKEN}")
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
@@ -127,15 +150,15 @@ async def main():
         first=10
     )
 
-    print("TIMER BOT STARTED OK")
+    print("WEBHOOK TIMER BOT STARTED OK")
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-
-    await asyncio.Event().wait()
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        secret_token=TOKEN
+    )
 
 
 if __name__ == "__main__":
 
-    asyncio.run(main())
+    main()
