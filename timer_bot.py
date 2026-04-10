@@ -136,15 +136,31 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
 
-    # проверяем каждые 10 секунд для точной синхронизации
     job_queue = app.job_queue
 
-    job_queue.run_repeating(
-        send_timer,
-        interval=10,
-        first=2
-    )
+    minutes = [0, 7, 14, 21, 28, 35, 42, 49, 56]
 
+    for minute in minutes:
+
+        job_queue.run_daily(
+            send_timer,
+            time=datetime.time(
+                hour=0,
+                minute=minute,
+                tzinfo=MOSCOW_TZ
+            )
+        )
+
+        for hour in range(1, 24):
+
+            job_queue.run_daily(
+                send_timer,
+                time=datetime.time(
+                    hour=hour,
+                    minute=minute,
+                    tzinfo=MOSCOW_TZ
+                )
+            )
 
     print("WEBHOOK TIMER BOT STARTED OK")
 
