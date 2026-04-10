@@ -3,13 +3,9 @@ import pandas as pd
 import datetime
 import pytz
 import json
-import asyncio
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
 
 
 TOKEN = os.getenv("TOKEN")
@@ -27,37 +23,28 @@ USERS_FILE = "/data/users.json"
 
 
 days_map = {
-    "Понедельник": "mon",
-    "Вторник": "tue",
-    "Среда": "wed",
-    "Четверг": "thu",
-    "Пятница": "fri",
-    "Суббота": "sat",
-    "Воскресенье": "sun"
+    "Понедельник": 0,
+    "Вторник": 1,
+    "Среда": 2,
+    "Четверг": 3,
+    "Пятница": 4,
+    "Суббота": 5,
+    "Воскресенье": 6
 }
 
 
 def load_users():
-
     try:
-
         with open(USERS_FILE, "r") as f:
-
             return json.load(f)
-
     except:
-
         with open(USERS_FILE, "w") as f:
-
             json.dump([], f)
-
         return []
 
 
 def save_users(users):
-
     with open(USERS_FILE, "w") as f:
-
         json.dump(users, f)
 
 
@@ -65,26 +52,18 @@ users = load_users()
 
 
 def load_schedule():
-
     return pd.read_csv(CSV_URL)
 
 
-async def send_to_all(app, text):
-
+async def send_to_all(context, text):
     for user in users:
-
         try:
-
-            await app.bot.send_message(chat_id=user, text=text)
-
+            await context.bot.send_message(chat_id=user, text=text)
         except:
-
             pass
 
 
 def schedule_jobs(app):
-
-    scheduler = BackgroundScheduler(timezone=MOSCOW_TZ)
 
     df = load_schedule()
 
@@ -92,37 +71,45 @@ def schedule_jobs(app):
 
         hour = int(row.iloc[0])
 
-        for day in days_map:
+        for day_name, weekday_number in days_map.items():
 
-            if day in df.columns:
+            event = row[day_name]
 
-                event = str(row[day])
+            if pd.notna(event):
 
-                if event != "nan":
+                # сообщение в момент события
+                app.job_queue.run_daily(
+                    lambda context, e=event:
+                    context.application.create_task(
+                        send_to_all(context, f"📢 Началось событие: {e}")
+                    ),
 
-                    scheduler.add_job(
-                        lambda e=event: asyncio.run(
-                            send_to_all(app, f"📢 Началось событие: {e}")
-                        ),
-                        CronTrigger(
-                            day_of_week=days_map[day],
-                            hour=hour,
-                            minute=0
-                        )
-                    )
+                    time=datetime.time(
+                        hour=hour,
+                        minute=0,
+                        tzinfo=MOSCOW_TZ
+                    ),
 
-                    scheduler.add_job(
-                        lambda e=event: asyncio.run(
-                            send_to_all(app, f"⏰ Через 5 минут начнётся: {e}")
-                        ),
-                        CronTrigger(
-                            day_of_week=days_map[day],
-                            hour=hour,
-                            minute=55
-                        )
-                    )
+                    days=(weekday_number,)
+                )
 
-    scheduler.start()
+                # сообщение за 5 минут до события
+                minute_before = (hour - 1) if hour > 0 else 23
+
+                app.job_queue.run_daily(
+                    lambda context, e=event:
+                    context.application.create_task(
+                        send_to_all(context, f"⏰ Через 5 минут начнётся: {e}")
+                    ),
+
+                    time=datetime.time(
+                        hour=minute_before,
+                        minute=55,
+                        tzinfo=MOSCOW_TZ
+                    ),
+
+                    days=(weekday_number,)
+                )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -130,9 +117,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id not in users:
-
         users.append(chat_id)
-
         save_users(users)
 
     await update.message.reply_text(
@@ -145,9 +130,7 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id in users:
-
         users.remove(chat_id)
-
         save_users(users)
 
     await update.message.reply_text(
@@ -169,10 +152,9 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         hour = int(row.iloc[0])
 
-        event = str(row[today_name])
+        event = row[today_name]
 
-        if event != "nan":
-
+        if pd.notna(event):
             message += f"{hour}:00 — {event}\n"
 
     await update.message.reply_text(message)
@@ -183,9 +165,7 @@ def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-
     app.add_handler(CommandHandler("stop", stop))
-
     app.add_handler(CommandHandler("today", today))
 
     schedule_jobs(app)
@@ -193,13 +173,12 @@ def main():
     print("WEBHOOK SCHEDULE BOT STARTED OK")
 
     app.run_webhook(
-    listen="0.0.0.0",
-    port=PORT,
-    url_path=TOKEN,
-    webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
-)
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=TOKEN,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+    )
 
 
 if __name__ == "__main__":
-
     main()
