@@ -63,16 +63,8 @@ async def send_to_all(context, text):
             pass
 
 
-# ВАЖНО: функция должна быть async
 async def schedule_jobs(app):
-    # быстрый тест через 20 секунд после запуска
-    app.job_queue.run_once(
-        lambda context:
-        context.application.create_task(
-            send_to_all(context, "TEST SCHEDULE WORKS ✅")
-        ),
-        when=20
-    )
+
     df = load_schedule()
 
     for _, row in df.iterrows():
@@ -102,8 +94,7 @@ async def schedule_jobs(app):
                 )
 
                 # уведомление за 5 минут
-                before_hour = hour if hour > 0 else 23
-                before_minute = 55 if hour > 0 else 55
+                before_hour = (hour - 1) % 24
 
                 app.job_queue.run_daily(
                     lambda context, e=event:
@@ -112,13 +103,22 @@ async def schedule_jobs(app):
                     ),
 
                     time=datetime.time(
-                        hour=before_hour - 1 if hour > 0 else 23,
+                        hour=before_hour,
                         minute=55,
                         tzinfo=MOSCOW_TZ
                     ),
 
                     days=(weekday_number,)
                 )
+
+
+async def reload_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    context.application.job_queue.scheduler.remove_all_jobs()
+
+    await schedule_jobs(context.application)
+
+    await update.message.reply_text("♻️ Расписание обновлено из Google таблицы")
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -181,6 +181,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("today", today))
+    app.add_handler(CommandHandler("reload", reload_schedule))
 
     print("WEBHOOK SCHEDULE BOT STARTED OK")
 
