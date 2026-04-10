@@ -9,7 +9,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
 TOKEN = os.getenv("TOKEN")
 
-PORT = int(os.getenv("PORT", 8080"))
+PORT = int(os.getenv("PORT", 8080))
 
 WEBHOOK_URL = "https://l2-bots-production.up.railway.app"
 
