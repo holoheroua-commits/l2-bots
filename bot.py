@@ -77,9 +77,11 @@ async def schedule_jobs(app):
 
             if pd.notna(event):
 
+                event_text = str(event)
+
                 # уведомление в момент события
                 app.job_queue.run_daily(
-                    lambda context, e=event:
+                    lambda context, e=event_text:
                     context.application.create_task(
                         send_to_all(context, f"📢 Началось событие: {e}")
                     ),
@@ -97,7 +99,7 @@ async def schedule_jobs(app):
                 before_hour = (hour - 1) % 24
 
                 app.job_queue.run_daily(
-                    lambda context, e=event:
+                    lambda context, e=event_text:
                     context.application.create_task(
                         send_to_all(context, f"⏰ Через 5 минут начнётся: {e}")
                     ),
