@@ -24,10 +24,19 @@ EXCLUDED = {
 
 
 def load_users():
+
     try:
+
         with open(USERS_FILE, "r") as f:
+
             return json.load(f)
+
     except:
+
+        with open(USERS_FILE, "w") as f:
+
+            json.dump([], f)
+
         return []
 
 
