@@ -31,21 +31,16 @@ EXCLUDED = {
 
 
 def load_users():
-
     try:
         with open(USERS_FILE, "r") as f:
             return json.load(f)
-
     except:
-
         with open(USERS_FILE, "w") as f:
             json.dump([], f)
-
         return []
 
 
 def save_users(users):
-
     with open(USERS_FILE, "w") as f:
         json.dump(users, f)
 
@@ -54,62 +49,47 @@ users = load_users()
 
 
 def allowed_now():
-
     now = datetime.datetime.now(MOSCOW_TZ)
 
     weekday = now.weekday()
     hour = now.hour
 
     if weekday in EXCLUDED:
-
         for start, end in EXCLUDED[weekday]:
-
             if start <= hour < end:
-
                 return False
 
     return True
 
 
 def is_exact_timer_minute(now):
-
     return now.minute % 7 == 0
 
 
 async def send_timer(context: ContextTypes.DEFAULT_TYPE):
-
     now = datetime.datetime.now(MOSCOW_TZ)
 
     if not allowed_now():
-
         return
 
     if not is_exact_timer_minute(now):
-
         return
 
     for user in users:
-
         try:
-
             await context.bot.send_message(
                 chat_id=user,
                 text="Регайся на арену"
             )
-
         except:
-
             pass
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     chat_id = update.message.chat_id
 
     if chat_id not in users:
-
         users.append(chat_id)
-
         save_users(users)
 
     await update.message.reply_text(
@@ -118,13 +98,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
     chat_id = update.message.chat_id
 
     if chat_id in users:
-
         users.remove(chat_id)
-
         save_users(users)
 
     await update.message.reply_text(
@@ -133,17 +110,12 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
-
-    app = (
-        ApplicationBuilder()
-        .token(TOKEN)
-        .webhook_url(f"{WEBHOOK_URL}/{TOKEN}")
-        .build()
-    )
+    app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
 
+    # проверяем каждую минуту
     app.job_queue.run_repeating(
         send_timer,
         interval=60,
@@ -155,10 +127,10 @@ def main():
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
         secret_token=TOKEN
     )
 
 
 if __name__ == "__main__":
-
     main()
