@@ -63,7 +63,8 @@ async def send_to_all(context, text):
             pass
 
 
-def schedule_jobs(app):
+# ВАЖНО: функция должна быть async
+async def schedule_jobs(app):
 
     df = load_schedule()
 
@@ -77,7 +78,7 @@ def schedule_jobs(app):
 
             if pd.notna(event):
 
-                # сообщение в момент события
+                # уведомление в момент события
                 app.job_queue.run_daily(
                     lambda context, e=event:
                     context.application.create_task(
@@ -93,8 +94,9 @@ def schedule_jobs(app):
                     days=(weekday_number,)
                 )
 
-                # сообщение за 5 минут до события
-                minute_before = (hour - 1) if hour > 0 else 23
+                # уведомление за 5 минут
+                before_hour = hour if hour > 0 else 23
+                before_minute = 55 if hour > 0 else 55
 
                 app.job_queue.run_daily(
                     lambda context, e=event:
@@ -103,7 +105,7 @@ def schedule_jobs(app):
                     ),
 
                     time=datetime.time(
-                        hour=minute_before,
+                        hour=before_hour - 1 if hour > 0 else 23,
                         minute=55,
                         tzinfo=MOSCOW_TZ
                     ),
