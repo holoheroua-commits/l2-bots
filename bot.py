@@ -193,10 +193,11 @@ def main():
     print("WEBHOOK SCHEDULE BOT STARTED OK")
 
     app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
-    )
+    listen="0.0.0.0",
+    port=PORT,
+    url_path=TOKEN,
+    webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+)
 
 
 if __name__ == "__main__":
