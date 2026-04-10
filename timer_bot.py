@@ -30,6 +30,9 @@ EXCLUDED = {
 }
 
 
+last_sent_minute = None
+
+
 def load_users():
     try:
         with open(USERS_FILE, "r") as f:
@@ -49,47 +52,61 @@ users = load_users()
 
 
 def allowed_now():
+
     now = datetime.datetime.now(MOSCOW_TZ)
 
     weekday = now.weekday()
     hour = now.hour
 
     if weekday in EXCLUDED:
+
         for start, end in EXCLUDED[weekday]:
+
             if start <= hour < end:
+
                 return False
 
     return True
 
 
-def is_exact_timer_minute(now):
-    return now.minute % 7 == 0
-
-
 async def send_timer(context: ContextTypes.DEFAULT_TYPE):
+
+    global last_sent_minute
+
     now = datetime.datetime.now(MOSCOW_TZ)
 
     if not allowed_now():
         return
 
-    if not is_exact_timer_minute(now):
+    if now.minute % 7 != 0:
         return
 
+    if last_sent_minute == now.minute:
+        return
+
+    last_sent_minute = now.minute
+
     for user in users:
+
         try:
+
             await context.bot.send_message(
                 chat_id=user,
                 text="Регайся на арену"
             )
+
         except:
             pass
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     chat_id = update.message.chat_id
 
     if chat_id not in users:
+
         users.append(chat_id)
+
         save_users(users)
 
     await update.message.reply_text(
@@ -98,10 +115,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
     chat_id = update.message.chat_id
 
     if chat_id in users:
+
         users.remove(chat_id)
+
         save_users(users)
 
     await update.message.reply_text(
@@ -110,27 +130,33 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
 
-    # проверяем каждую минуту
-    app.job_queue.run_repeating(
+    # проверяем каждые 10 секунд для точной синхронизации
+    job_queue = app.job_queue
+
+    job_queue.run_repeating(
         send_timer,
-        interval=60,
-        first=10
+        interval=10,
+        first=2
     )
+
+    job_queue.start()
 
     print("WEBHOOK TIMER BOT STARTED OK")
 
     app.run_webhook(
-    listen="0.0.0.0",
-    port=PORT,
-    url_path=TOKEN,
-    webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
-)
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=TOKEN,
+        webhook_url=f"{WEBHOOK_URL}/{TOKEN}"
+    )
 
 
 if __name__ == "__main__":
+
     main()
