@@ -10,8 +10,7 @@ TOKEN = "8786027118:AAG4URfFxnF8bgTxfBReCMvtH3aEor4vyGE"
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
-USERS_FILE = r"D:\timer_bot\users_timer.json"
-
+USERS_FILE = "timer_users.json"
 
 EXCLUDED = {
     0: [(21, 22)],
