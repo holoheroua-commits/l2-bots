@@ -162,13 +162,16 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
 
-    app = ApplicationBuilder().token(TOKEN).build()
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .post_init(schedule_jobs)
+        .build()
+    )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("today", today))
-
-    app.post_init(schedule_jobs)
 
     print("WEBHOOK SCHEDULE BOT STARTED OK")
 
