@@ -55,15 +55,22 @@ def load_schedule():
     return pd.read_csv(CSV_URL)
 
 
-async def send_to_all(context, text):
+async def send_to_all(bot, text):
+
     for user in users:
+
         try:
-            await context.bot.send_message(chat_id=user, text=text)
+            await bot.send_message(chat_id=user, text=text)
+
         except:
             pass
 
 
 async def schedule_jobs(app):
+
+    scheduler = app.job_queue.scheduler
+
+    scheduler.remove_all_jobs()
 
     df = load_schedule()
 
@@ -80,47 +87,43 @@ async def schedule_jobs(app):
                 event_text = str(event)
 
                 # уведомление в момент события
-                app.job_queue.run_daily(
-                    lambda context, e=event_text:
-                    context.application.create_task(
-                        send_to_all(context, f"📢 Началось событие: {e}")
+                scheduler.add_job(
+                    lambda e=event_text:
+                    app.create_task(
+                        send_to_all(app.bot,
+                        f"📢 Началось событие: {e}")
                     ),
-
-                    time=datetime.time(
-                        hour=hour,
-                        minute=0,
-                        tzinfo=MOSCOW_TZ
-                    ),
-
-                    days=(weekday_number,)
+                    trigger="cron",
+                    day_of_week=weekday_number,
+                    hour=hour,
+                    minute=0,
+                    timezone=MOSCOW_TZ
                 )
 
                 # уведомление за 5 минут
                 before_hour = (hour - 1) % 24
 
-                app.job_queue.run_daily(
-                    lambda context, e=event_text:
-                    context.application.create_task(
-                        send_to_all(context, f"⏰ Через 5 минут начнётся: {e}")
+                scheduler.add_job(
+                    lambda e=event_text:
+                    app.create_task(
+                        send_to_all(app.bot,
+                        f"⏰ Через 5 минут начнётся: {e}")
                     ),
-
-                    time=datetime.time(
-                        hour=before_hour,
-                        minute=55,
-                        tzinfo=MOSCOW_TZ
-                    ),
-
-                    days=(weekday_number,)
+                    trigger="cron",
+                    day_of_week=weekday_number,
+                    hour=before_hour,
+                    minute=55,
+                    timezone=MOSCOW_TZ
                 )
 
 
 async def reload_schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
-    context.application.job_queue.scheduler.remove_all_jobs()
-
     await schedule_jobs(context.application)
 
-    await update.message.reply_text("♻️ Расписание обновлено из Google таблицы")
+    await update.message.reply_text(
+        "♻️ Расписание обновлено из Google таблицы"
+    )
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -128,7 +131,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id not in users:
+
         users.append(chat_id)
+
         save_users(users)
 
     await update.message.reply_text(
@@ -141,7 +146,9 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
 
     if chat_id in users:
+
         users.remove(chat_id)
+
         save_users(users)
 
     await update.message.reply_text(
@@ -166,6 +173,7 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
         event = row[today_name]
 
         if pd.notna(event):
+
             message += f"{hour}:00 — {event}\n"
 
     await update.message.reply_text(message)
