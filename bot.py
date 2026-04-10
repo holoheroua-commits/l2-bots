@@ -1,60 +1,52 @@
-import pandas as pd
+import os
+import json
 import datetime
 import pytz
-import json
+import asyncio
 
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    ContextTypes
+)
+
+from aiohttp import web
 
 
-TOKEN = "8297475538:AAE5ZSQSz3x-Ly6Gq1D-_F7yEDfCeuKXpy8"
+TOKEN = os.getenv("TOKEN")
 
-CSV_URL = "https://docs.google.com/spreadsheets/d/1QMrkdAfyaaR3WLq23cvl30eCLocH4aiqo_oy3ydV44M/export?format=csv&gid=656412099"
+PORT = int(os.getenv("PORT", 8080))
+
+WEBHOOK_URL = "https://sweet-exploration-production-7cb4.up.railway.app"
+
 
 MOSCOW_TZ = pytz.timezone("Europe/Moscow")
 
 USERS_FILE = "users.json"
 
 
-days_map = {
-    "Понедельник": 0,
-    "Вторник": 1,
-    "Среда": 2,
-    "Четверг": 3,
-    "Пятница": 4,
-    "Суббота": 5,
-    "Воскресенье": 6
-}
-
-
 def load_users():
+
     try:
         with open(USERS_FILE, "r") as f:
             return json.load(f)
+
     except:
+
+        with open(USERS_FILE, "w") as f:
+            json.dump([], f)
+
         return []
 
 
 def save_users(users):
+
     with open(USERS_FILE, "w") as f:
         json.dump(users, f)
 
 
 users = load_users()
-
-
-def load_schedule():
-    return pd.read_csv(CSV_URL)
-
-
-async def send_to_all(app, text):
-
-    for user in users:
-
-        try:
-            await app.bot.send_message(chat_id=user, text=text)
-        except:
-            pass
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,9 +58,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users.append(chat_id)
         save_users(users)
 
-    await update.message.reply_text(
-        "✅ Ты подписан на уведомления расписания"
-    )
+    await update.message.reply_text("Ты подписан на уведомления")
 
 
 async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -80,88 +70,65 @@ async def stop(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users.remove(chat_id)
         save_users(users)
 
-    await update.message.reply_text(
-        "❌ Ты отписан от уведомлений"
-    )
+    await update.message.reply_text("Ты отписан")
 
 
-async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    df = load_schedule()
-
-    today_num = datetime.datetime.now(MOSCOW_TZ).weekday()
-
-    today_name = list(days_map.keys())[today_num]
-
-    message = "📅 Сегодня события:\n\n"
-
-    for _, row in df.iterrows():
-
-        hour = int(row.iloc[0])
-
-        event = str(row[today_name])
-
-        if event != "nan":
-
-            message += f"{hour}:00 — {event}\n"
-
-    await update.message.reply_text(message)
-
-
-async def check_schedule(context: ContextTypes.DEFAULT_TYPE):
+async def send_schedule(context: ContextTypes.DEFAULT_TYPE):
 
     now = datetime.datetime.now(MOSCOW_TZ)
 
-    df = load_schedule()
+    if now.minute != 0:
+        return
 
-    weekday = now.weekday()
+    for user in users:
 
-    for _, row in df.iterrows():
+        try:
 
-        hour = int(row.iloc[0])
+            await context.bot.send_message(
+                chat_id=user,
+                text="Время регистрации"
+            )
 
-        for day_name, day_num in days_map.items():
-
-            if weekday == day_num:
-
-                event = str(row[day_name])
-
-                if event == "nan":
-                    continue
-
-                if now.minute == 55 and now.hour == hour - 1:
-
-                    await send_to_all(
-                        context,
-                        f"⏰ Через 5 минут начнётся: {event}"
-                    )
-
-                if now.minute == 0 and now.hour == hour:
-
-                    await send_to_all(
-                        context,
-                        f"📢 Началось событие: {event}"
-                    )
+        except:
+            pass
 
 
-def main():
+async def main():
 
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("stop", stop))
-    app.add_handler(CommandHandler("today", today))
 
     app.job_queue.run_repeating(
-        check_schedule,
+        send_schedule,
         interval=60,
-        first=5
+        first=10
     )
 
-    print("SCHEDULE BOT STARTED")
+    await app.initialize()
 
-    app.run_polling()
+    await app.bot.set_webhook(
+        url=f"{WEBHOOK_URL}/{TOKEN}"
+    )
+
+    runner = web.AppRunner(app.web_app())
+
+    await runner.setup()
+
+    site = web.TCPSite(
+        runner,
+        "0.0.0.0",
+        PORT
+    )
+
+    await site.start()
+
+    print("WEBHOOK BOT STARTED OK")
+
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+
+    asyncio.run(main())
