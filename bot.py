@@ -169,7 +169,7 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(app):
 
-    asyncio.create_task(
+    app.create_task(
         scheduler_loop(app)
     )
 
@@ -187,7 +187,7 @@ def main():
     app.add_handler(CommandHandler("stop", stop))
     app.add_handler(CommandHandler("today", today))
 
-    print("SCHEDULE LOOP STARTED")
+    print("SCHEDULE LOOP STARTED OK")
 
     app.run_webhook(
         listen="0.0.0.0",
