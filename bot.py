@@ -205,8 +205,11 @@ async def today(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def post_init(app):
 
-    app.create_task(
-        scheduler_loop(app)
+    app.job_queue.run_once(
+        lambda context: context.application.create_task(
+            scheduler_loop(context.application)
+        ),
+        when=1
     )
 
 
